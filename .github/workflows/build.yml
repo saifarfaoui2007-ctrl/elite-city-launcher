@@ -1,3 +1,4 @@
+
 name: Build ELITE CITY APK
 
 on:
@@ -10,18 +11,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download project
+      - name: Checkout project
         uses: actions/checkout@v4
-
-      - name: Extract project ZIP
-        run: |
-          mkdir source
-          ZIP=$(find . -maxdepth 1 -iname "*.zip" | head -n 1)
-          test -n "$ZIP"
-          unzip "$ZIP" -d source
-          PROJECT=$(find source -name settings.gradle | head -n 1)
-          test -n "$PROJECT"
-          echo "PROJECT_DIR=$(dirname "$PROJECT")" >> $GITHUB_ENV
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -41,11 +32,11 @@ jobs:
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
       - name: Build APK
-        run: gradle -p "$PROJECT_DIR" assembleDebug
+        run: gradle assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ELITE-CITY-APK
-          path: source/**/app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
