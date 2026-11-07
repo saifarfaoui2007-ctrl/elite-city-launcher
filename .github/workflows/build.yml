@@ -1,3 +1,4 @@
+
 name: Build ELITE CITY APK
 
 on:
@@ -21,53 +22,46 @@ jobs:
           java-version: '17'
 
       - name: Setup Android SDK
-        run: |
-          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          SDKMANAGER=$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | head -n 1)
-          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
-          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
-          yes | "$SDKMANAGER" --licenses
-          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0"
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+
+      - name: Accept licenses
+        run: yes | sdkmanager --licenses || true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Extract project ZIP
+      - name: Extract project
         run: |
-          ZIP_FILE=$(find . -maxdepth 1 -type f -name '*.zip' | head -n 1)
-          if [ -z "$ZIP_FILE" ]; then
-            echo "Project ZIP not found"
-            exit 1
-          fi
-          mkdir extracted
-          unzip -q "$ZIP_FILE" -d extracted
+          unzip -o ELITE_CITY_LAUNCHER_BUILD_PROJECT-1.zip -d project
+          PROJECT_DIR=$(find project -name settings.gradle -printf '%h\n' | head -n 1)
+          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+
+      - name: Add ELITE CITY icon
+        run: |
+          test -s ic_launcher.png
+          MANIFEST="$PROJECT_DIR/app/src/main/AndroidManifest.xml"
+          RES="$PROJECT_DIR/app/src/main/res"
+          mkdir -p "$RES/drawable"
+          cp ic_launcher.png "$RES/drawable/ic_launcher.png"
+          python3 -c "import xml.etree.ElementTree as E; p='$MANIFEST'; t=E.parse(p); a=t.getroot().find('application'); ns='{http://schemas.android.com/apk/res/android}'; a.set(ns+'icon','@drawable/ic_launcher'); a.set(ns+'roundIcon','@drawable/ic_launcher'); t.write(p,encoding='utf-8',xml_declaration=True)"
 
       - name: Build APK
         run: |
-          SETTINGS=$(find extracted -type f \( -name settings.gradle -o -name settings.gradle.kts \) | head -n 1)
-          if [ -z "$SETTINGS" ]; then
-            echo "Gradle project not found inside ZIP"
-            find extracted -maxdepth 4 -type f
-            exit 1
-          fi
-          PROJECT_DIR=$(dirname "$SETTINGS")
           cd "$PROJECT_DIR"
           gradle assembleDebug
 
       - name: Prepare APK
         run: |
-          APK=$(find extracted -type f -path '*/build/outputs/apk/debug/*.apk' | head -n 1)
-          if [ -z "$APK" ]; then
-            echo "APK not found"
-            exit 1
-          fi
-          cp "$APK" "$GITHUB_WORKSPACE/ELITE-CITY.apk"
+          mkdir -p output
+          find "$PROJECT_DIR/app/build/outputs/apk" -name '*.apk' -exec cp {} output/ELITE-CITY.apk \;
+          test -s output/ELITE-CITY.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ELITE-CITY-APK
-          path: ELITE-CITY.apk
-          if-no-files-found: error
+          path: output/ELITE-CITY.apk
